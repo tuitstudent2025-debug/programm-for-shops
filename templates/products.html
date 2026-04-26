@@ -1,0 +1,319 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <h2><i class="bi bi-box-seam me-2"></i>Справочник товаров</h2>
+  <div class="d-flex gap-2">
+    <button class="btn btn-outline-secondary" onclick="showImportModal()">
+      <i class="bi bi-upload me-2"></i>Импорт CSV
+    </button>
+    <button class="btn btn-primary btn-lg" onclick="openProductForm()">
+      <i class="bi bi-plus-lg me-2"></i>Добавить товар
+    </button>
+  </div>
+</div>
+
+<!-- Фильтры -->
+<div class="filter-bar">
+  <input type="text" class="form-control" id="filter-search" placeholder="Поиск по названию, артикулу..."
+    oninput="filterProducts()">
+  <select class="form-select" id="filter-cat" onchange="filterProducts()">
+    <option value="">Все категории</option>
+  </select>
+  <div class="form-check form-check-inline ms-2">
+    <input class="form-check-input" type="checkbox" id="filter-low" onchange="filterProducts()">
+    <label class="form-check-label">Мало на складе</label>
+  </div>
+</div>
+
+<!-- Таблица товаров -->
+<div class="table-responsive">
+  <table class="table table-hover align-middle" id="products-table">
+    <thead class="table-light sticky-top">
+      <tr>
+        <th>Артикул</th>
+        <th>Наименование</th>
+        <th>Категория</th>
+        <th class="text-end">Цена ₽</th>
+        <th class="text-end">Закупка ₽</th>
+        <th>НДС</th>
+        <th class="text-end">Остаток</th>
+        <th>Ед.</th>
+        <th>Избр.</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="products-body">
+      <tr><td colspan="10" class="text-center py-5"><div class="spinner-border"></div></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Модал: форма товара -->
+<div class="modal fade" id="productModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="product-modal-title">Добавить товар</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="product-id">
+        <div class="row g-3">
+          <div class="col-md-3">
+            <label class="form-label">Артикул *</label>
+            <input type="text" class="form-control" id="p-article" required>
+          </div>
+          <div class="col-md-9">
+            <label class="form-label">Наименование *</label>
+            <input type="text" class="form-control" id="p-name" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Категория</label>
+            <select class="form-select" id="p-category"></select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Единица</label>
+            <select class="form-select" id="p-unit">
+              <option value="шт">шт</option>
+              <option value="кг">кг</option>
+              <option value="л">л</option>
+              <option value="м">м</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">НДС</label>
+            <select class="form-select" id="p-vat">
+              <option value="0">Без НДС</option>
+              <option value="10">10%</option>
+              <option value="20">20%</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Цена продажи (₽) *</label>
+            <input type="number" class="form-control" id="p-price" min="0" step="0.01" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Закупочная цена (₽)</label>
+            <input type="number" class="form-control" id="p-cost" min="0" step="0.01">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Штрихкод (EAN-13)</label>
+            <input type="text" class="form-control" id="p-barcode" maxlength="20">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Текущий остаток</label>
+            <input type="number" class="form-control" id="p-stock" min="0" step="0.001">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Минимальный остаток</label>
+            <input type="number" class="form-control" id="p-minstock" min="0" step="0.001">
+          </div>
+          <div class="col-md-4 d-flex align-items-end">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="p-favorite">
+              <label class="form-check-label">Быстрая кнопка</label>
+            </div>
+          </div>
+        </div>
+        <div id="product-form-error" class="alert alert-danger mt-3 d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+        <button type="button" class="btn btn-primary btn-lg" onclick="saveProduct()">
+          <i class="bi bi-check-lg me-2"></i>Сохранить
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Модал: импорт CSV -->
+<div class="modal fade" id="importModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Импорт товаров из CSV</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted">Файл CSV должен содержать столбцы:<br>
+          <code>article</code> (артикул), <code>name</code> (наименование), <code>price</code> (цена), <code>barcode</code> (штрихкод, необязательно)
+        </p>
+        <input type="file" class="form-control" id="csv-file" accept=".csv">
+        <div id="import-result" class="mt-3 d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+        <button type="button" class="btn btn-primary" onclick="importCSV()">Импортировать</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+let allProducts = [];
+let allCategories = [];
+
+async function loadAll() {
+  const [prods, cats] = await Promise.all([
+    api('/api/products'), api('/api/categories')
+  ]);
+  allProducts = prods;
+  allCategories = cats;
+  renderCategoryFilter();
+  renderProducts(prods);
+}
+
+function renderCategoryFilter() {
+  const sel = document.getElementById('filter-cat');
+  const pSel = document.getElementById('p-category');
+  allCategories.forEach(c => {
+    sel.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+    pSel.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+  });
+}
+
+function filterProducts() {
+  const q = document.getElementById('filter-search').value.toLowerCase();
+  const cat = document.getElementById('filter-cat').value;
+  const low = document.getElementById('filter-low').checked;
+  const filtered = allProducts.filter(p => {
+    const matchQ = !q || p.name.toLowerCase().includes(q) || p.article.toLowerCase().includes(q);
+    const matchCat = !cat || p.category_id == cat;
+    const matchLow = !low || p.stock_quantity <= p.min_stock;
+    return matchQ && matchCat && matchLow;
+  });
+  renderProducts(filtered);
+}
+
+function renderProducts(products) {
+  const tbody = document.getElementById('products-body');
+  if (!products.length) {
+    tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4">Товары не найдены</td></tr>';
+    return;
+  }
+  tbody.innerHTML = products.map(p => {
+    const lowStock = p.stock_quantity <= p.min_stock;
+    return `<tr class="${lowStock ? 'table-warning' : ''}">
+      <td><code>${p.article}</code></td>
+      <td>${p.name}</td>
+      <td>${p.category_name || '—'}</td>
+      <td class="text-end fw-bold">${fmt(p.price)}</td>
+      <td class="text-end text-muted">${p.cost_price ? fmt(p.cost_price) : '—'}</td>
+      <td><span class="badge bg-light text-dark">${p.vat_rate}%</span></td>
+      <td class="text-end ${lowStock ? 'text-danger fw-bold' : ''}">${p.stock_quantity} ${p.unit}</td>
+      <td>${p.unit}</td>
+      <td>${p.is_favorite ? '<i class="bi bi-star-fill text-warning"></i>' : ''}</td>
+      <td class="text-end">
+        <button class="btn btn-sm btn-outline-primary me-1" onclick="editProduct(${p.id})"><i class="bi bi-pencil"></i></button>
+        <button class="btn btn-sm btn-outline-danger" onclick="deleteProduct(${p.id},'${p.name}')"><i class="bi bi-trash"></i></button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function openProductForm(id) {
+  document.getElementById('product-id').value = '';
+  document.getElementById('product-modal-title').textContent = 'Добавить товар';
+  document.getElementById('p-article').value = '';
+  document.getElementById('p-name').value = '';
+  document.getElementById('p-category').value = '';
+  document.getElementById('p-unit').value = 'шт';
+  document.getElementById('p-vat').value = '0';
+  document.getElementById('p-price').value = '';
+  document.getElementById('p-cost').value = '';
+  document.getElementById('p-barcode').value = '';
+  document.getElementById('p-stock').value = '0';
+  document.getElementById('p-minstock').value = '0';
+  document.getElementById('p-favorite').checked = false;
+  document.getElementById('product-form-error').classList.add('d-none');
+  new bootstrap.Modal(document.getElementById('productModal')).show();
+}
+
+function editProduct(id) {
+  const p = allProducts.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('product-id').value = p.id;
+  document.getElementById('product-modal-title').textContent = 'Редактировать товар';
+  document.getElementById('p-article').value = p.article;
+  document.getElementById('p-name').value = p.name;
+  document.getElementById('p-category').value = p.category_id || '';
+  document.getElementById('p-unit').value = p.unit;
+  document.getElementById('p-vat').value = p.vat_rate;
+  document.getElementById('p-price').value = p.price;
+  document.getElementById('p-cost').value = p.cost_price || '';
+  document.getElementById('p-barcode').value = p.barcode || '';
+  document.getElementById('p-stock').value = p.stock_quantity;
+  document.getElementById('p-minstock').value = p.min_stock;
+  document.getElementById('p-favorite').checked = !!p.is_favorite;
+  document.getElementById('product-form-error').classList.add('d-none');
+  new bootstrap.Modal(document.getElementById('productModal')).show();
+}
+
+async function saveProduct() {
+  const id = document.getElementById('product-id').value;
+  const data = {
+    article: document.getElementById('p-article').value.trim(),
+    name: document.getElementById('p-name').value.trim(),
+    category_id: document.getElementById('p-category').value || null,
+    unit: document.getElementById('p-unit').value,
+    vat_rate: document.getElementById('p-vat').value,
+    price: document.getElementById('p-price').value,
+    cost_price: document.getElementById('p-cost').value || 0,
+    barcode: document.getElementById('p-barcode').value.trim(),
+    stock_quantity: document.getElementById('p-stock').value || 0,
+    min_stock: document.getElementById('p-minstock').value || 0,
+    is_favorite: document.getElementById('p-favorite').checked ? 1 : 0,
+  };
+  if (!data.article || !data.name || !data.price) {
+    document.getElementById('product-form-error').textContent = 'Заполните обязательные поля: артикул, название, цена';
+    document.getElementById('product-form-error').classList.remove('d-none');
+    return;
+  }
+  const url = id ? `/api/products/${id}` : '/api/products';
+  const method = id ? 'PUT' : 'POST';
+  const resp = await apiReq(method, url, data);
+  if (resp.ok) {
+    bootstrap.Modal.getInstance(document.getElementById('productModal')).hide();
+    toast('Товар сохранён', 'success');
+    loadAll();
+  } else {
+    const d = await resp.json();
+    document.getElementById('product-form-error').textContent = d.error;
+    document.getElementById('product-form-error').classList.remove('d-none');
+  }
+}
+
+function deleteProduct(id, name) {
+  confirmDialog(`Деактивировать товар "${name}"?`, async () => {
+    const resp = await apiReq('DELETE', `/api/products/${id}`);
+    if (resp.ok) { toast('Товар удалён', 'success'); loadAll(); }
+  });
+}
+
+function showImportModal() {
+  document.getElementById('import-result').classList.add('d-none');
+  new bootstrap.Modal(document.getElementById('importModal')).show();
+}
+
+async function importCSV() {
+  const file = document.getElementById('csv-file').files[0];
+  if (!file) { toast('Выберите файл', 'warning'); return; }
+  const fd = new FormData();
+  fd.append('file', file);
+  const resp = await fetch('/api/products/import-csv', {method:'POST', body: fd});
+  const data = await resp.json();
+  const res = document.getElementById('import-result');
+  res.classList.remove('d-none');
+  res.innerHTML = `<div class="alert alert-success">Импортировано: ${data.imported} товаров</div>`;
+  if (data.errors.length) {
+    res.innerHTML += `<div class="alert alert-warning">Ошибки:<br>${data.errors.join('<br>')}</div>`;
+  }
+  loadAll();
+}
+
+loadAll();
+</script>
+{% endblock %}

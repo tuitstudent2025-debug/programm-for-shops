@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <h2><i class="bi bi-truck me-2"></i>Движение товаров</h2>
+  <div class="d-flex gap-2">
+    <button class="btn btn-success btn-lg" onclick="openMovementForm('in')">
+      <i class="bi bi-arrow-down-circle me-2"></i>Приход
+    </button>
+    <button class="btn btn-warning btn-lg" onclick="openMovementForm('out')">
+      <i class="bi bi-arrow-up-circle me-2"></i>Списание
+    </button>
+  </div>
+</div>
+
+<div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead class="table-light sticky-top">
+      <tr>
+        <th>Дата</th>
+        <th>Тип</th>
+        <th>Товар</th>
+        <th>Артикул</th>
+        <th class="text-end">Количество</th>
+        <th class="text-end">Цена</th>
+        <th>Документ</th>
+        <th>Сотрудник</th>
+      </tr>
+    </thead>
+    <tbody id="inventory-body">
+      <tr><td colspan="8" class="text-center py-5"><div class="spinner-border"></div></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Модал: приход/списание -->
+<div class="modal fade" id="movementModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header" id="movement-header">
+        <h5 class="modal-title" id="movement-title">Приходная накладная</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="movement-type">
+        <div class="mb-3">
+          <label class="form-label">Номер документа</label>
+          <input type="text" class="form-control" id="doc-number">
+        </div>
+        <!-- Поиск товара -->
+        <div class="mb-3 position-relative">
+          <label class="form-label">Добавить товар</label>
+          <input type="text" class="form-control" id="mov-search" placeholder="Название или артикул..." oninput="movSearch(this.value)">
+          <div class="search-dropdown" id="mov-dropdown"></div>
+        </div>
+        <!-- Позиции накладной -->
+        <table class="table table-sm" id="movement-items-table">
+          <thead>
+            <tr><th>Товар</th><th>Кол-во</th><th>Цена</th><th></th></tr>
+          </thead>
+          <tbody id="movement-items-body">
+            <tr><td colspan="4" class="text-muted text-center">Добавьте товары</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+        <button class="btn btn-success btn-lg" onclick="saveMovement()">
+          <i class="bi bi-check-circle me-2"></i>Сохранить
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let movItems = [];
+let movSearchTimeout;
+
+async function loadMovements() {
+  const rows = await api('/api/inventory');
+  const tbody = document.getElementById('inventory-body');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">Нет записей</td></tr>';
+    return;
+  }
+  const typeLabels = {in: '<span class="badge bg-success">Приход</span>', out: '<span class="badge bg-warning text-dark">Списание</span>', return: '<span class="badge bg-info">Возврат</span>'};
+  tbody.innerHTML = rows.map(r => `<tr>
+    <td>${r.created_at}</td>
+    <td>${typeLabels[r.movement_type] || r.movement_type}</td>
+    <td>${r.product_name}</td>
+    <td><code>${r.article}</code></td>
+    <td class="text-end">${r.quantity}</td>
+    <td class="text-end">${r.price ? fmt(r.price) : '—'}</td>
+    <td><small>${r.document_number || '—'}</small></td>
+    <td>${r.user_name}</td>
+  </tr>`).join('');
+}
+
+function openMovementForm(type) {
+  movItems = [];
+  document.getElementById('movement-type').value = type;
+  const title = type === 'in' ? 'Приходная накладная' : 'Акт списания';
+  document.getElementById('movement-title').textContent = title;
+  document.getElementById('doc-number').value = (type === 'in' ? 'ПН-' : 'АС-') + new Date().toISOString().slice(0,10);
+  document.getElementById('mov-search').value = '';
+  document.getElementById('mov-dropdown').innerHTML = '';
+  renderMovItems();
+  new bootstrap.Modal(document.getElementById('movementModal')).show();
+}
+
+function movSearch(q) {
+  clearTimeout(movSearchTimeout);
+  if (q.length < 2) { document.getElementById('mov-dropdown').innerHTML = ''; return; }
+  movSearchTimeout = setTimeout(async () => {
+    const results = await api(`/api/products/search?q=${encodeURIComponent(q)}`);
+    const dd = document.getElementById('mov-dropdown');
+    dd.innerHTML = results.map(p => `
+      <div class="search-item" onclick="addMovItem(${JSON.stringify(p).replace(/"/g,'&quot;')})">
+        <strong>${p.name}</strong> <small class="text-muted">${p.article}</small>
+        <span class="float-end">${fmt(p.price)}</span>
+      </div>
+    `).join('');
+    dd.style.display = results.length ? 'block' : 'none';
+  }, 300);
+}
+
+function addMovItem(product) {
+  document.getElementById('mov-dropdown').style.display = 'none';
+  document.getElementById('mov-search').value = '';
+  if (movItems.find(i => i.id === product.id)) {
+    movItems.find(i => i.id === product.id).qty++;
+  } else {
+    movItems.push({id: product.id, name: product.name, qty: 1, price: product.cost_price || product.price});
+  }
+  renderMovItems();
+}
+
+function renderMovItems() {
+  const tbody = document.getElementById('movement-items-body');
+  if (!movItems.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-muted text-center">Добавьте товары</td></tr>';
+    return;
+  }
+  tbody.innerHTML = movItems.map((item, i) => `<tr>
+    <td>${item.name}</td>
+    <td><input type="number" class="form-control form-control-sm" style="width:80px" value="${item.qty}" min="0.001" step="0.001" onchange="movItems[${i}].qty=parseFloat(this.value)||1"></td>
+    <td><input type="number" class="form-control form-control-sm" style="width:90px" value="${item.price}" min="0" step="0.01" onchange="movItems[${i}].price=parseFloat(this.value)||0"></td>
+    <td><button class="btn btn-sm btn-outline-danger" onclick="movItems.splice(${i},1);renderMovItems()"><i class="bi bi-x"></i></button></td>
+  </tr>`).join('');
+}
+
+async function saveMovement() {
+  if (!movItems.length) { toast('Добавьте хотя бы один товар', 'warning'); return; }
+  const data = {
+    movement_type: document.getElementById('movement-type').value,
+    document_number: document.getElementById('doc-number').value,
+    items: movItems.map(i => ({product_id: i.id, quantity: i.qty, price: i.price}))
+  };
+  const resp = await apiReq('POST', '/api/inventory', data);
+  if (resp.ok) {
+    bootstrap.Modal.getInstance(document.getElementById('movementModal')).hide();
+    toast('Документ сохранён', 'success');
+    loadMovements();
+  } else {
+    const d = await resp.json();
+    toast(d.error, 'danger');
+  }
+}
+
+loadMovements();
+</script>
+{% endblock %}

@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <h2><i class="bi bi-tags me-2"></i>Категории товаров</h2>
+  <button class="btn btn-primary btn-lg" onclick="openAdd()">
+    <i class="bi bi-plus-lg me-2"></i>Добавить
+  </button>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-body p-0">
+        <ul class="list-group list-group-flush" id="cat-list">
+          <li class="list-group-item text-center py-4">
+            <div class="spinner-border"></div>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Модал добавления/редактирования -->
+<div class="modal fade" id="catModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="cat-modal-title">Добавить категорию</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="cat-id">
+        <label class="form-label">Название *</label>
+        <input type="text" class="form-control form-control-lg" id="cat-name" placeholder="Напитки">
+        <div id="cat-error" class="alert alert-danger mt-2 d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+        <button class="btn btn-primary" onclick="saveCat()">Сохранить</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let categories = [];
+async function loadCats() {
+  categories = await api('/api/categories');
+  const ul = document.getElementById('cat-list');
+  if (!categories.length) {
+    ul.innerHTML = '<li class="list-group-item text-center text-muted">Нет категорий</li>';
+    return;
+  }
+  ul.innerHTML = categories.map(c => `
+    <li class="list-group-item d-flex justify-content-between align-items-center py-3">
+      <span class="fs-5"><i class="bi bi-tag me-2 text-primary"></i>${c.name}</span>
+      <div>
+        <button class="btn btn-sm btn-outline-primary me-1" onclick="openEdit(${c.id},'${c.name}')"><i class="bi bi-pencil"></i></button>
+        <button class="btn btn-sm btn-outline-danger" onclick="deleteCat(${c.id},'${c.name}')"><i class="bi bi-trash"></i></button>
+      </div>
+    </li>
+  `).join('');
+}
+function openAdd() {
+  document.getElementById('cat-id').value = '';
+  document.getElementById('cat-name').value = '';
+  document.getElementById('cat-modal-title').textContent = 'Добавить категорию';
+  document.getElementById('cat-error').classList.add('d-none');
+  new bootstrap.Modal(document.getElementById('catModal')).show();
+}
+function openEdit(id, name) {
+  document.getElementById('cat-id').value = id;
+  document.getElementById('cat-name').value = name;
+  document.getElementById('cat-modal-title').textContent = 'Изменить категорию';
+  document.getElementById('cat-error').classList.add('d-none');
+  new bootstrap.Modal(document.getElementById('catModal')).show();
+}
+async function saveCat() {
+  const id = document.getElementById('cat-id').value;
+  const name = document.getElementById('cat-name').value.trim();
+  if (!name) return;
+  const url = id ? `/api/categories/${id}` : '/api/categories';
+  const method = id ? 'PUT' : 'POST';
+  const resp = await apiReq(method, url, {name});
+  if (resp.ok) {
+    bootstrap.Modal.getInstance(document.getElementById('catModal')).hide();
+    toast('Сохранено', 'success');
+    loadCats();
+  } else {
+    const d = await resp.json();
+    document.getElementById('cat-error').textContent = d.error;
+    document.getElementById('cat-error').classList.remove('d-none');
+  }
+}
+function deleteCat(id, name) {
+  confirmDialog(`Удалить категорию "${name}"?`, async () => {
+    const resp = await apiReq('DELETE', `/api/categories/${id}`);
+    if (resp.ok) { toast('Категория удалена', 'success'); loadCats(); }
+    else { const d = await resp.json(); toast(d.error, 'danger'); }
+  });
+}
+loadCats();
+</script>
+{% endblock %}

@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <h2><i class="bi bi-gear me-2"></i>Настройки</h2>
+  <button class="btn btn-primary btn-lg" onclick="saveSettings()">
+    <i class="bi bi-check-lg me-2"></i>Сохранить
+  </button>
+</div>
+
+<div class="row g-4">
+  <!-- Реквизиты магазина -->
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-header fw-bold"><i class="bi bi-shop me-2"></i>Реквизиты магазина</div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label">Название магазина</label>
+          <input type="text" class="form-control" id="s-shop_name">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Адрес</label>
+          <input type="text" class="form-control" id="s-shop_address">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">ИНН</label>
+          <input type="text" class="form-control" id="s-shop_inn" maxlength="12">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Телефон</label>
+          <input type="text" class="form-control" id="s-shop_phone">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Текст в конце чека</label>
+          <textarea class="form-control" id="s-receipt_footer" rows="2"></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Параметры работы -->
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-header fw-bold"><i class="bi bi-sliders me-2"></i>Параметры работы</div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label">Максимальный срок возврата (дней)</label>
+          <input type="number" class="form-control" id="s-return_days" min="0" max="365">
+        </div>
+        <div class="mb-3">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="s-use_vat">
+            <label class="form-check-label">Выделять НДС в чеке</label>
+          </div>
+        </div>
+        <div class="mb-3">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="s-allow_price_change">
+            <label class="form-check-label">Разрешить изменение цены кассиру</label>
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Формат чека</label>
+          <select class="form-select" id="s-receipt_format">
+            <option value="full">Полный</option>
+            <option value="compact">Компактный</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Префикс сканера штрихкодов</label>
+          <input type="text" class="form-control" id="s-barcode_prefix" placeholder="Например: {">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Суффикс сканера штрихкодов</label>
+          <input type="text" class="form-control" id="s-barcode_suffix" placeholder="Обычно Enter">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Резервное копирование -->
+  <div class="col-md-12">
+    <div class="card">
+      <div class="card-header fw-bold"><i class="bi bi-hdd me-2"></i>Резервное копирование базы данных</div>
+      <div class="card-body d-flex gap-3 flex-wrap">
+        <a href="/api/backup" class="btn btn-success btn-lg">
+          <i class="bi bi-download me-2"></i>Скачать резервную копию
+        </a>
+        <div>
+          <label class="form-label">Восстановить из файла:</label>
+          <div class="d-flex gap-2">
+            <input type="file" class="form-control" id="restore-file" accept=".db">
+            <button class="btn btn-danger" onclick="restoreBackup()">
+              <i class="bi bi-upload me-2"></i>Восстановить
+            </button>
+          </div>
+          <small class="text-muted">Внимание: текущие данные будут заменены!</small>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function loadSettings() {
+  const s = await api('/api/settings');
+  document.getElementById('s-shop_name').value = s.shop_name || '';
+  document.getElementById('s-shop_address').value = s.shop_address || '';
+  document.getElementById('s-shop_inn').value = s.shop_inn || '';
+  document.getElementById('s-shop_phone').value = s.shop_phone || '';
+  document.getElementById('s-receipt_footer').value = s.receipt_footer || '';
+  document.getElementById('s-return_days').value = s.return_days || 14;
+  document.getElementById('s-use_vat').checked = s.use_vat === '1';
+  document.getElementById('s-allow_price_change').checked = s.allow_price_change === '1';
+  document.getElementById('s-receipt_format').value = s.receipt_format || 'full';
+  document.getElementById('s-barcode_prefix').value = s.barcode_prefix || '';
+  document.getElementById('s-barcode_suffix').value = s.barcode_suffix || '';
+}
+
+async function saveSettings() {
+  const data = {
+    shop_name: document.getElementById('s-shop_name').value,
+    shop_address: document.getElementById('s-shop_address').value,
+    shop_inn: document.getElementById('s-shop_inn').value,
+    shop_phone: document.getElementById('s-shop_phone').value,
+    receipt_footer: document.getElementById('s-receipt_footer').value,
+    return_days: document.getElementById('s-return_days').value,
+    use_vat: document.getElementById('s-use_vat').checked ? '1' : '0',
+    allow_price_change: document.getElementById('s-allow_price_change').checked ? '1' : '0',
+    receipt_format: document.getElementById('s-receipt_format').value,
+    barcode_prefix: document.getElementById('s-barcode_prefix').value,
+    barcode_suffix: document.getElementById('s-barcode_suffix').value,
+  };
+  const resp = await apiReq('PUT', '/api/settings', data);
+  if (resp.ok) toast('Настройки сохранены', 'success');
+  else toast('Ошибка сохранения', 'danger');
+}
+
+async function restoreBackup() {
+  const file = document.getElementById('restore-file').files[0];
+  if (!file) { toast('Выберите файл', 'warning'); return; }
+  if (!confirm('Вы уверены? Все текущие данные будут заменены данными из резервной копии!')) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  const resp = await fetch('/api/backup', {method:'POST', body: fd});
+  if (resp.ok) {
+    toast('База данных восстановлена. Перезапустите приложение.', 'success');
+  } else {
+    const d = await resp.json();
+    toast(d.error, 'danger');
+  }
+}
+
+loadSettings();
+</script>
+{% endblock %}

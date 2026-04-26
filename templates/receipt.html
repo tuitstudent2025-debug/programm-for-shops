@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Чек #{{ sale.id }}</title>
+<style>
+  @media print {
+    body { margin: 0; }
+    .no-print { display: none !important; }
+  }
+  body {
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    max-width: 320px;
+    margin: 0 auto;
+    padding: 10px;
+    color: #000;
+  }
+  .center { text-align: center; }
+  .right { text-align: right; }
+  .bold { font-weight: bold; }
+  .line { border-top: 1px dashed #000; margin: 6px 0; }
+  .double-line { border-top: 2px solid #000; margin: 6px 0; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 1px 2px; vertical-align: top; }
+  .total-row td { font-weight: bold; font-size: 14px; }
+  .shop-name { font-size: 16px; font-weight: bold; }
+  .thank-you { font-size: 14px; font-weight: bold; }
+  .btn-print {
+    display: block;
+    width: 100%;
+    padding: 12px;
+    background: #0d6efd;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    cursor: pointer;
+    margin-bottom: 10px;
+  }
+  .return-badge {
+    background: #dc3545;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+
+<div class="no-print" style="padding: 10px;">
+  <button class="btn-print" onclick="window.print()">🖨️ Распечатать чек</button>
+  <button onclick="window.close()" style="width:100%;padding:8px;background:#6c757d;color:white;border:none;border-radius:6px;cursor:pointer;">✕ Закрыть</button>
+</div>
+
+<!-- ЧЕК -->
+<div class="center">
+  <div class="shop-name">{{ settings.shop_name or 'Магазин' }}</div>
+  {% if settings.shop_address %}
+  <div>{{ settings.shop_address }}</div>
+  {% endif %}
+  {% if settings.shop_inn %}
+  <div>ИНН: {{ settings.shop_inn }}</div>
+  {% endif %}
+  {% if settings.shop_phone %}
+  <div>Тел: {{ settings.shop_phone }}</div>
+  {% endif %}
+</div>
+
+<div class="double-line"></div>
+
+{% if sale.is_return %}
+<div class="center"><span class="return-badge">*** ВОЗВРАТ ***</span></div>
+{% endif %}
+
+<div>
+  <b>Чек №{{ sale.id }}</b><br>
+  Дата: {{ sale.sale_date }}<br>
+  Кассир: {{ sale.cashier_name }}
+  {% if sale.loyalty_card %}
+  <br>Карта: {{ sale.loyalty_card }}
+  {% endif %}
+</div>
+
+<div class="line"></div>
+
+<table>
+  <thead>
+    <tr>
+      <td class="bold">Товар</td>
+      <td class="bold right" width="40">Кол.</td>
+      <td class="bold right" width="55">Цена</td>
+      <td class="bold right" width="55">Сумма</td>
+    </tr>
+  </thead>
+  <tbody>
+  {% for item in items %}
+    <tr>
+      <td>{{ item.product_name }}</td>
+      <td class="right">{{ item.quantity }}</td>
+      <td class="right">{{ "%.2f"|format(item.unit_price) }}</td>
+      <td class="right">{{ "%.2f"|format(item.total_price) }}</td>
+    </tr>
+    {% if settings.use_vat == '1' and item.vat_rate > 0 %}
+    <tr>
+      <td colspan="4" style="font-size:10px;padding-left:10px;color:#555">
+        НДС {{ item.vat_rate }}%: {{ "%.2f"|format(item.total_price * item.vat_rate / (100 + item.vat_rate)) }} ₽
+      </td>
+    </tr>
+    {% endif %}
+  {% endfor %}
+  </tbody>
+</table>
+
+<div class="line"></div>
+
+<table>
+  {% if sale.discount_amount and sale.discount_amount > 0 %}
+  <tr>
+    <td>Сумма без скидки:</td>
+    <td class="right">{{ "%.2f"|format(sale.total_amount) }} ₽</td>
+  </tr>
+  <tr>
+    <td>Скидка:</td>
+    <td class="right">- {{ "%.2f"|format(sale.discount_amount) }} ₽</td>
+  </tr>
+  {% endif %}
+  <tr class="total-row">
+    <td>ИТОГО:</td>
+    <td class="right">{{ "%.2f"|format(sale.final_amount) }} ₽</td>
+  </tr>
+</table>
+
+<div class="line"></div>
+
+<table>
+  <tr>
+    <td>
+      {% if sale.payment_method == 'cash' %}Наличные
+      {% elif sale.payment_method == 'card' %}Банковская карта
+      {% else %}Смешанная оплата{% endif %}:
+    </td>
+    <td class="right">{{ "%.2f"|format(sale.paid_amount) }} ₽</td>
+  </tr>
+  {% if sale.payment_method == 'cash' and sale.change_amount > 0 %}
+  <tr>
+    <td><b>Сдача:</b></td>
+    <td class="right"><b>{{ "%.2f"|format(sale.change_amount) }} ₽</b></td>
+  </tr>
+  {% endif %}
+</table>
+
+{% if settings.use_vat == '1' %}
+<div class="line"></div>
+<div style="font-size:10px">
+  {% set ns = namespace(vat10=0, vat20=0) %}
+  {% for item in items %}
+    {% if item.vat_rate == 10 %}{% set ns.vat10 = ns.vat10 + item.total_price * 10 / 110 %}{% endif %}
+    {% if item.vat_rate == 20 %}{% set ns.vat20 = ns.vat20 + item.total_price * 20 / 120 %}{% endif %}
+  {% endfor %}
+  {% if ns.vat10 > 0 %}НДС 10%: {{ "%.2f"|format(ns.vat10) }} ₽<br>{% endif %}
+  {% if ns.vat20 > 0 %}НДС 20%: {{ "%.2f"|format(ns.vat20) }} ₽{% endif %}
+</div>
+{% endif %}
+
+<div class="double-line"></div>
+
+<div class="center thank-you">
+  {{ settings.receipt_footer or 'Спасибо за покупку!' }}
+</div>
+
+<div style="margin-top:20px;font-size:9px;color:#999;text-align:center">
+  Документ сформирован POS-системой
+</div>
+
+<script>
+  // Автоматическая печать при открытии в новом окне
+  window.addEventListener('load', function() {
+    if (window.opener) {
+      setTimeout(() => window.print(), 500);
+    }
+  });
+</script>
+</body>
+</html>

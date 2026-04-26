@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <h2><i class="bi bi-bar-chart-line me-2"></i>Отчёты</h2>
+</div>
+
+<!-- Выбор периода -->
+<div class="filter-bar mb-4">
+  <label class="fw-semibold">Период:</label>
+  <input type="date" class="form-control" id="r-from">
+  <span>—</span>
+  <input type="date" class="form-control" id="r-to">
+  <button class="btn btn-primary" onclick="loadAll()"><i class="bi bi-search me-2"></i>Построить</button>
+  <button class="btn btn-outline-success" onclick="exportCSV()"><i class="bi bi-download me-2"></i>Экспорт CSV</button>
+</div>
+
+<!-- Вкладки -->
+<ul class="nav nav-tabs mb-3" id="report-tabs">
+  <li class="nav-item"><a class="nav-link active" href="#" onclick="showTab('sales',this)">По дням</a></li>
+  <li class="nav-item"><a class="nav-link" href="#" onclick="showTab('cashiers',this)">По кассирам</a></li>
+  <li class="nav-item"><a class="nav-link" href="#" onclick="showTab('products',this)">По товарам</a></li>
+  <li class="nav-item"><a class="nav-link" href="#" onclick="showTab('inventory',this)">Остатки</a></li>
+</ul>
+
+<div id="report-content">
+  <div class="text-center py-5 text-muted">Выберите период и нажмите «Построить»</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const today = new Date().toISOString().slice(0,10);
+const monthStart = new Date().toISOString().slice(0,8) + '01';
+document.getElementById('r-from').value = monthStart;
+document.getElementById('r-to').value = today;
+
+let currentTab = 'sales';
+let currentData = null;
+
+function showTab(tab, el) {
+  currentTab = tab;
+  document.querySelectorAll('#report-tabs .nav-link').forEach(l => l.classList.remove('active'));
+  el.classList.add('active');
+  if (currentData) renderTab(tab, currentData);
+}
+
+async function loadAll() {
+  const from = document.getElementById('r-from').value;
+  const to = document.getElementById('r-to').value;
+  document.getElementById('report-content').innerHTML = '<div class="text-center py-5"><div class="spinner-border"></div></div>';
+
+  const [sales, cashiers, products, inventory] = await Promise.all([
+    api(`/api/reports/sales?from=${from}&to=${to}`),
+    api(`/api/reports/cashiers?from=${from}&to=${to}`),
+    api(`/api/reports/products?from=${from}&to=${to}`),
+    api('/api/reports/inventory'),
+  ]);
+  currentData = {sales, cashiers, products, inventory};
+  renderTab(currentTab, currentData);
+}
+
+function renderTab(tab, data) {
+  const el = document.getElementById('report-content');
+  if (tab === 'sales') {
+    const total = data.sales.reduce((a,r) => a+r.revenue,0);
+    el.innerHTML = `
+      <div class="mb-3"><strong>Выручка за период: ${fmt(total)}</strong></div>
+      <div class="table-responsive"><table class="table table-hover table-sm">
+        <thead class="table-light"><tr><th>Дата</th><th class="text-end">Продаж</th><th class="text-end">Возвратов</th><th class="text-end">Выручка</th><th class="text-end">Возвращено</th><th class="text-end">Скидки</th></tr></thead>
+        <tbody>${data.sales.map(r => `<tr>
+          <td>${r.day}</td>
+          <td class="text-end">${r.sales_count}</td>
+          <td class="text-end">${r.returns_count}</td>
+          <td class="text-end text-success fw-bold">${fmt(r.revenue)}</td>
+          <td class="text-end text-danger">${fmt(r.returned)}</td>
+          <td class="text-end text-warning">${fmt(r.discounts)}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>`;
+  } else if (tab === 'cashiers') {
+    el.innerHTML = `
+      <div class="table-responsive"><table class="table table-hover">
+        <thead class="table-light"><tr><th>Кассир</th><th>Логин</th><th class="text-end">Чеков</th><th class="text-end">Выручка</th></tr></thead>
+        <tbody>${data.cashiers.map(r => `<tr>
+          <td>${r.full_name}</td><td><code>${r.username}</code></td>
+          <td class="text-end">${r.sales_count}</td>
+          <td class="text-end fw-bold">${fmt(r.revenue)}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>`;
+  } else if (tab === 'products') {
+    el.innerHTML = `
+      <div class="table-responsive"><table class="table table-hover table-sm">
+        <thead class="table-light"><tr><th>Товар</th><th>Артикул</th><th class="text-end">Продано</th><th class="text-end">Выручка</th><th class="text-end">Себест.</th><th class="text-end">Прибыль</th></tr></thead>
+        <tbody>${data.products.map(r => `<tr>
+          <td>${r.name}</td><td><code>${r.article}</code></td>
+          <td class="text-end">${r.sold_qty}</td>
+          <td class="text-end">${fmt(r.revenue)}</td>
+          <td class="text-end text-muted">${r.cost ? fmt(r.cost) : '—'}</td>
+          <td class="text-end ${r.profit > 0 ? 'text-success' : 'text-danger'}">${r.profit ? fmt(r.profit) : '—'}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>`;
+  } else if (tab === 'inventory') {
+    const lowStock = data.inventory.filter(p => p.stock_quantity <= p.min_stock);
+    el.innerHTML = `
+      <div class="mb-2 text-danger"><i class="bi bi-exclamation-triangle me-1"></i>${lowStock.length} товаров ниже минимума</div>
+      <div class="table-responsive"><table class="table table-hover table-sm">
+        <thead class="table-light"><tr><th>Артикул</th><th>Товар</th><th>Категория</th><th class="text-end">Остаток</th><th class="text-end">Минимум</th><th>Ед.</th></tr></thead>
+        <tbody>${data.inventory.map(p => `<tr class="${p.stock_quantity <= p.min_stock ? 'table-warning' : ''}">
+          <td><code>${p.article}</code></td><td>${p.name}</td><td>${p.category_name||'—'}</td>
+          <td class="text-end fw-bold">${p.stock_quantity}</td>
+          <td class="text-end text-muted">${p.min_stock}</td>
+          <td>${p.unit}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>`;
+  }
+}
+
+function exportCSV() {
+  if (!currentData) { toast('Сначала постройте отчёт', 'warning'); return; }
+  let rows, headers, filename;
+  if (currentTab === 'sales') {
+    headers = ['Дата','Продаж','Возвратов','Выручка','Возвращено','Скидки'];
+    rows = currentData.sales.map(r => [r.day, r.sales_count, r.returns_count, r.revenue, r.returned, r.discounts]);
+    filename = 'report_sales.csv';
+  } else if (currentTab === 'cashiers') {
+    headers = ['Кассир','Логин','Чеков','Выручка'];
+    rows = currentData.cashiers.map(r => [r.full_name, r.username, r.sales_count, r.revenue]);
+    filename = 'report_cashiers.csv';
+  } else if (currentTab === 'products') {
+    headers = ['Товар','Артикул','Продано','Выручка','Себестоимость','Прибыль'];
+    rows = currentData.products.map(r => [r.name, r.article, r.sold_qty, r.revenue, r.cost||0, r.profit||0]);
+    filename = 'report_products.csv';
+  } else {
+    headers = ['Артикул','Товар','Категория','Остаток','Минимум','Ед.'];
+    rows = currentData.inventory.map(r => [r.article, r.name, r.category_name||'', r.stock_quantity, r.min_stock, r.unit]);
+    filename = 'report_inventory.csv';
+  }
+  const csv = [headers, ...rows].map(r => r.join(';')).join('\n');
+  const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+</script>
+{% endblock %}

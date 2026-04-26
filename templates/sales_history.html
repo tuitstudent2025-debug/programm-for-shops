@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <h2><i class="bi bi-receipt me-2"></i>Журнал продаж</h2>
+</div>
+
+<!-- Фильтры -->
+<div class="filter-bar flex-wrap gap-2">
+  <div class="d-flex align-items-center gap-2">
+    <label class="text-nowrap">С:</label>
+    <input type="date" class="form-control" id="f-from" onchange="loadSales()">
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    <label class="text-nowrap">По:</label>
+    <input type="date" class="form-control" id="f-to" onchange="loadSales()">
+  </div>
+  <select class="form-select" id="f-payment" onchange="loadSales()" style="max-width:180px">
+    <option value="">Все способы</option>
+    <option value="cash">Наличные</option>
+    <option value="card">Карта</option>
+    <option value="mixed">Смешанная</option>
+  </select>
+  <button class="btn btn-outline-primary" onclick="loadSales()">
+    <i class="bi bi-search"></i>
+  </button>
+</div>
+
+<!-- Итоги -->
+<div class="row g-3 mb-3" id="sales-summary"></div>
+
+<!-- Таблица -->
+<div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead class="table-light sticky-top">
+      <tr>
+        <th>№ чека</th>
+        <th>Дата</th>
+        <th>Кассир</th>
+        <th>Тип</th>
+        <th>Оплата</th>
+        <th class="text-end">Сумма</th>
+        <th class="text-end">Скидка</th>
+        <th class="text-end">Итого</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="sales-body">
+      <tr><td colspan="9" class="text-center py-5"><div class="spinner-border"></div></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Модал: детали продажи -->
+<div class="modal fade" id="saleDetailModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="sale-detail-title">Детали чека</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="sale-detail-body"></div>
+      <div class="modal-footer" id="sale-detail-footer"></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+// Установить даты по умолчанию
+const today = new Date().toISOString().slice(0,10);
+const monthAgo = new Date(Date.now() - 30*24*3600000).toISOString().slice(0,10);
+document.getElementById('f-from').value = monthAgo;
+document.getElementById('f-to').value = today;
+
+const isAdmin = document.cookie.includes('admin') || true; // проверим через me
+
+let currentSales = [];
+
+async function loadSales() {
+  const from = document.getElementById('f-from').value;
+  const to = document.getElementById('f-to').value;
+  const payment = document.getElementById('f-payment').value;
+  let url = `/api/sales?from=${from}&to=${to}`;
+  if (payment) url += `&payment=${payment}`;
+  currentSales = await api(url);
+  renderSales();
+  renderSummary();
+}
+
+function renderSummary() {
+  const sales = currentSales.filter(s => !s.is_return);
+  const returns = currentSales.filter(s => s.is_return);
+  const totalRev = sales.reduce((a,s) => a + s.final_amount, 0);
+  const totalRet = returns.reduce((a,s) => a + s.final_amount, 0);
+  document.getElementById('sales-summary').innerHTML = `
+    <div class="col-sm-3"><div class="stat-card"><div class="stat-value">${sales.length}</div><div class="stat-label">Продаж</div></div></div>
+    <div class="col-sm-3"><div class="stat-card"><div class="stat-value text-success">${fmt(totalRev)}</div><div class="stat-label">Выручка</div></div></div>
+    <div class="col-sm-3"><div class="stat-card"><div class="stat-value text-danger">${returns.length}</div><div class="stat-label">Возвратов</div></div></div>
+    <div class="col-sm-3"><div class="stat-card"><div class="stat-value">${fmt(totalRev - totalRet)}</div><div class="stat-label">Нетто</div></div></div>
+  `;
+}
+
+function renderSales() {
+  const tbody = document.getElementById('sales-body');
+  if (!currentSales.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">Нет продаж за выбранный период</td></tr>';
+    return;
+  }
+  const payLabels = {cash:'<i class="bi bi-cash-stack text-success"></i> Наличные', card:'<i class="bi bi-credit-card text-primary"></i> Карта', mixed:'<i class="bi bi-wallet2 text-warning"></i> Смешанная'};
+  tbody.innerHTML = currentSales.map(s => `<tr class="${s.is_return ? 'table-warning' : ''}">
+    <td><strong>#${s.id}</strong></td>
+    <td>${s.sale_date}</td>
+    <td>${s.cashier_name}</td>
+    <td>${s.is_return ? '<span class="badge bg-warning text-dark">Возврат</span>' : '<span class="badge bg-success">Продажа</span>'}</td>
+    <td>${payLabels[s.payment_method] || s.payment_method}</td>
+    <td class="text-end">${fmt(s.total_amount)}</td>
+    <td class="text-end text-danger">${s.discount_amount ? '- '+fmt(s.discount_amount) : '—'}</td>
+    <td class="text-end fw-bold">${fmt(s.final_amount)}</td>
+    <td><button class="btn btn-sm btn-outline-primary" onclick="showDetail(${s.id})"><i class="bi bi-eye"></i></button></td>
+  </tr>`).join('');
+}
+
+async function showDetail(id) {
+  const data = await api(`/api/sales/${id}`);
+  const s = data.sale;
+  const items = data.items;
+  const me = await api('/api/me');
+
+  document.getElementById('sale-detail-title').textContent = `Чек #${s.id} от ${s.sale_date}`;
+  document.getElementById('sale-detail-body').innerHTML = `
+    <div class="row mb-3">
+      <div class="col"><strong>Кассир:</strong> ${s.cashier_name}</div>
+      <div class="col"><strong>Оплата:</strong> ${s.payment_method}</div>
+      <div class="col"><strong>Получено:</strong> ${fmt(s.paid_amount)}</div>
+      <div class="col"><strong>Сдача:</strong> ${fmt(s.change_amount)}</div>
+    </div>
+    <table class="table table-sm">
+      <thead><tr><th>Товар</th><th class="text-end">Цена</th><th class="text-end">Кол-во</th><th class="text-end">Сумма</th></tr></thead>
+      <tbody>${items.map(i => `<tr><td>${i.product_name}</td><td class="text-end">${fmt(i.unit_price)}</td><td class="text-end">${i.quantity}</td><td class="text-end">${fmt(i.total_price)}</td></tr>`).join('')}</tbody>
+      <tfoot>
+        <tr><th colspan="3">Скидка</th><th class="text-end text-danger">${s.discount_amount ? '- '+fmt(s.discount_amount) : '—'}</th></tr>
+        <tr class="table-success"><th colspan="3">Итого</th><th class="text-end">${fmt(s.final_amount)}</th></tr>
+      </tfoot>
+    </table>
+  `;
+
+  const footer = document.getElementById('sale-detail-footer');
+  let btns = `<button class="btn btn-outline-secondary" data-bs-dismiss="modal">Закрыть</button>`;
+  btns += `<a class="btn btn-outline-primary" href="/receipt/${s.id}" target="_blank"><i class="bi bi-printer me-1"></i>Печать</a>`;
+  if (!s.is_return) {
+    btns += `<button class="btn btn-warning" onclick="doReturn(${s.id})"><i class="bi bi-arrow-return-left me-1"></i>Возврат</button>`;
+  }
+  if (me.role === 'admin' && !s.is_return) {
+    btns += `<button class="btn btn-danger" onclick="cancelSale(${s.id})"><i class="bi bi-x-circle me-1"></i>Аннулировать</button>`;
+  }
+  footer.innerHTML = btns;
+  new bootstrap.Modal(document.getElementById('saleDetailModal')).show();
+}
+
+async function doReturn(saleId) {
+  const resp = await apiReq('POST', `/api/sales/${saleId}/return`, {});
+  if (resp.ok) {
+    const d = await resp.json();
+    bootstrap.Modal.getInstance(document.getElementById('saleDetailModal')).hide();
+    toast(`Возврат оформлен, чек #${d.return_id}`, 'success');
+    loadSales();
+  } else {
+    const d = await resp.json();
+    toast(d.error, 'danger');
+  }
+}
+
+async function cancelSale(id) {
+  confirmDialog(`Аннулировать чек #${id}? Остатки товаров будут восстановлены.`, async () => {
+    const resp = await apiReq('DELETE', `/api/sales/${id}`);
+    if (resp.ok) {
+      bootstrap.Modal.getInstance(document.getElementById('saleDetailModal')).hide();
+      toast('Чек аннулирован', 'success');
+      loadSales();
+    } else {
+      const d = await resp.json();
+      toast(d.error, 'danger');
+    }
+  });
+}
+
+loadSales();
+</script>
+{% endblock %}

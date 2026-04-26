@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Вход — POS-система</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="login-body">
+
+<div class="login-wrapper">
+  <div class="login-card">
+    <div class="login-icon"><i class="bi bi-shop-window"></i></div>
+    <h2 class="login-title">POS-система</h2>
+    <p class="login-subtitle">Введите данные для входа</p>
+
+    <div id="login-error" class="alert alert-danger d-none" role="alert"></div>
+
+    <div class="mb-4">
+      <label class="form-label fw-semibold">Логин</label>
+      <div class="input-group input-group-lg">
+        <span class="input-group-text"><i class="bi bi-person"></i></span>
+        <input type="text" class="form-control" id="username" placeholder="admin" autocomplete="username">
+      </div>
+    </div>
+    <div class="mb-4">
+      <label class="form-label fw-semibold">Пароль</label>
+      <div class="input-group input-group-lg">
+        <span class="input-group-text"><i class="bi bi-lock"></i></span>
+        <input type="password" class="form-control" id="password" placeholder="••••••" autocomplete="current-password">
+        <button class="btn btn-outline-secondary" type="button" onclick="togglePass()">
+          <i class="bi bi-eye" id="pass-eye"></i>
+        </button>
+      </div>
+    </div>
+
+    <button class="btn btn-primary btn-lg w-100 login-btn" onclick="doLogin()" id="login-btn">
+      <i class="bi bi-box-arrow-in-right me-2"></i>Войти
+    </button>
+
+    <div class="login-hint mt-4">
+      <small class="text-muted">
+        По умолчанию:<br>
+        Администратор: <code>admin</code> / <code>admin</code><br>
+        Кассир: <code>кассир</code> / <code>1234</code>
+      </small>
+    </div>
+  </div>
+</div>
+
+<script>
+document.getElementById('password').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+document.getElementById('username').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('password').focus();
+});
+
+function togglePass() {
+  const inp = document.getElementById('password');
+  const eye = document.getElementById('pass-eye');
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    eye.className = 'bi bi-eye-slash';
+  } else {
+    inp.type = 'password';
+    eye.className = 'bi bi-eye';
+  }
+}
+
+async function doLogin() {
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
+  const btn = document.getElementById('login-btn');
+  const err = document.getElementById('login-error');
+
+  if (!username || !password) {
+    err.textContent = 'Введите логин и пароль';
+    err.classList.remove('d-none');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Вход...';
+
+  try {
+    const resp = await fetch('/api/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username, password})
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      window.location.href = data.role === 'cashier' ? '/cashier' : '/cashier';
+    } else {
+      err.textContent = data.error || 'Ошибка входа';
+      err.classList.remove('d-none');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-box-arrow-in-right me-2"></i>Войти';
+    }
+  } catch(e) {
+    err.textContent = 'Ошибка соединения с сервером';
+    err.classList.remove('d-none');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-box-arrow-in-right me-2"></i>Войти';
+  }
+}
+</script>
+</body>
+</html>

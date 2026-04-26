@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- Экран кассира -->
+<div class="cashier-layout">
+
+  <!-- Левая панель: корзина -->
+  <div class="cashier-left">
+
+    <!-- Поиск товара -->
+    <div class="search-panel">
+      <div class="input-group input-group-lg">
+        <span class="input-group-text"><i class="bi bi-search"></i></span>
+        <input type="text" class="form-control" id="product-search"
+          placeholder="Название, артикул или штрихкод..."
+          autocomplete="off" oninput="onSearchInput(this.value)">
+        <button class="btn btn-outline-secondary" onclick="clearSearch()">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+      <!-- Подсказки -->
+      <div class="search-dropdown" id="search-dropdown"></div>
+    </div>
+
+    <!-- Корзина -->
+    <div class="cart-wrapper">
+      <table class="table table-hover cart-table" id="cart-table">
+        <thead>
+          <tr>
+            <th width="30">№</th>
+            <th>Товар</th>
+            <th width="90">Цена</th>
+            <th width="80">Кол-во</th>
+            <th width="90">Сумма</th>
+            <th width="40"></th>
+          </tr>
+        </thead>
+        <tbody id="cart-body">
+          <tr id="cart-empty">
+            <td colspan="6" class="text-center text-muted py-5">
+              <i class="bi bi-cart3 fs-1 d-block mb-2"></i>
+              Корзина пуста
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Быстрые товары -->
+    <div class="quick-products" id="quick-products">
+      <div class="text-muted small px-2 mb-1">Быстрый выбор:</div>
+      <div class="quick-grid" id="quick-grid"></div>
+    </div>
+  </div>
+
+  <!-- Правая панель: итоги и оплата -->
+  <div class="cashier-right">
+
+    <!-- Карта лояльности -->
+    <div class="loyalty-section">
+      <div class="input-group">
+        <span class="input-group-text"><i class="bi bi-credit-card-2-front"></i></span>
+        <input type="text" class="form-control" id="loyalty-input"
+          placeholder="Карта лояльности (номер или телефон)"
+          oninput="checkLoyalty(this.value)">
+        <button class="btn btn-outline-secondary" onclick="clearLoyalty()">
+          <i class="bi bi-x"></i>
+        </button>
+      </div>
+      <div id="loyalty-info" class="loyalty-info d-none"></div>
+    </div>
+
+    <!-- Итоги -->
+    <div class="totals-panel">
+      <div class="total-row">
+        <span>Итого:</span>
+        <span id="total-sum">0,00 ₽</span>
+      </div>
+      <div class="total-row discount-row">
+        <div class="d-flex align-items-center gap-2">
+          <span>Скидка:</span>
+          <select class="form-select form-select-sm" id="discount-type" style="width:90px" onchange="recalc()">
+            <option value="percent">%</option>
+            <option value="fixed">₽</option>
+          </select>
+          <input type="number" class="form-control form-control-sm" id="discount-value"
+            style="width:80px" min="0" value="0" oninput="recalc()">
+        </div>
+        <span id="discount-sum" class="text-danger">- 0,00 ₽</span>
+      </div>
+      <div class="total-row total-final">
+        <span>К оплате:</span>
+        <span id="final-sum">0,00 ₽</span>
+      </div>
+    </div>
+
+    <!-- Кнопки оплаты -->
+    <div class="payment-btns">
+      <button class="btn-pay btn-cash" onclick="openPayModal('cash')">
+        <i class="bi bi-cash-stack"></i>
+        <span>Наличные</span>
+      </button>
+      <button class="btn-pay btn-card" onclick="openPayModal('card')">
+        <i class="bi bi-credit-card"></i>
+        <span>Карта</span>
+      </button>
+      <button class="btn-pay btn-mixed" onclick="openPayModal('mixed')">
+        <i class="bi bi-wallet2"></i>
+        <span>Смешанная</span>
+      </button>
+    </div>
+
+    <!-- Кнопка очистки -->
+    <button class="btn btn-outline-danger w-100 btn-lg mt-2" onclick="clearCart()">
+      <i class="bi bi-trash3 me-2"></i>Очистить корзину
+    </button>
+
+    <!-- Инфо о смене -->
+    <div class="shift-panel" id="shift-panel">
+      <div id="shift-info-block"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Модал: смена -->
+<div class="modal fade" id="shiftModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="shiftModalTitle">Открытие смены</h5>
+      </div>
+      <div class="modal-body" id="shiftModalBody">
+        <div class="mb-3">
+          <label class="form-label">Начальный остаток в кассе (₽)</label>
+          <input type="number" class="form-control form-control-lg" id="initial-cash" value="0" min="0">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-success btn-lg" onclick="openShift()">
+          <i class="bi bi-play-circle me-2"></i>Открыть смену
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Модал: закрытие смены -->
+<div class="modal fade" id="closeShiftModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Закрытие смены — X/Z-отчёт</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="close-shift-body"></div>
+      <div class="modal-footer" id="close-shift-footer">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+        <button class="btn btn-warning btn-lg" onclick="confirmCloseShift()">
+          <i class="bi bi-stop-circle me-2"></i>Закрыть смену (Z-отчёт)
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Модал: оплата -->
+<div class="modal fade" id="payModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="pay-modal-title">Оплата</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="pay-modal-body"></div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+        <button class="btn btn-success btn-lg" id="pay-confirm-btn" onclick="confirmPayment()">
+          <i class="bi bi-check-circle me-2"></i>Провести оплату
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Модал: сдача -->
+<div class="modal fade" id="changeModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-success text-white">
+        <h5 class="modal-title"><i class="bi bi-check-circle me-2"></i>Продажа проведена!</h5>
+      </div>
+      <div class="modal-body text-center" id="change-modal-body"></div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" onclick="closeChangeModal()">
+          Закрыть
+        </button>
+        <button class="btn btn-primary" id="print-receipt-btn">
+          <i class="bi bi-printer me-2"></i>Печать чека
+        </button>
+        <button class="btn btn-success btn-lg" onclick="closeChangeModal()">
+          <i class="bi bi-cart-plus me-2"></i>Новый чек
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/cashier.js"></script>
+{% endblock %}

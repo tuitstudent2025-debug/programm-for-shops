@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <h2><i class="bi bi-people me-2"></i>Пользователи</h2>
+  <button class="btn btn-primary btn-lg" onclick="openUserForm()">
+    <i class="bi bi-person-plus me-2"></i>Добавить
+  </button>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Сотрудник</th>
+            <th>Логин</th>
+            <th>Роль</th>
+            <th>Статус</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="users-body">
+          <tr><td colspan="5" class="text-center py-4"><div class="spinner-border"></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Модал пользователя -->
+<div class="modal fade" id="userModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="user-modal-title">Добавить пользователя</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="user-id">
+        <div class="mb-3">
+          <label class="form-label">ФИО *</label>
+          <input type="text" class="form-control form-control-lg" id="u-fullname">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Логин *</label>
+          <input type="text" class="form-control" id="u-username" autocomplete="off">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Пароль <span id="pass-hint" class="text-muted">(оставьте пустым, чтобы не менять)</span></label>
+          <input type="password" class="form-control" id="u-password" autocomplete="new-password">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Роль</label>
+          <select class="form-select" id="u-role">
+            <option value="cashier">Кассир</option>
+            <option value="admin">Администратор</option>
+          </select>
+        </div>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="u-active" checked>
+          <label class="form-check-label">Активен</label>
+        </div>
+        <div id="user-error" class="alert alert-danger mt-3 d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+        <button class="btn btn-primary btn-lg" onclick="saveUser()">Сохранить</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let users = [];
+
+async function loadUsers() {
+  users = await api('/api/users');
+  const tbody = document.getElementById('users-body');
+  tbody.innerHTML = users.map(u => `<tr class="${!u.active ? 'text-muted' : ''}">
+    <td><i class="bi bi-person-circle me-2"></i>${u.full_name}</td>
+    <td><code>${u.username}</code></td>
+    <td>${u.role === 'admin' ? '<span class="badge bg-danger">Администратор</span>' : '<span class="badge bg-primary">Кассир</span>'}</td>
+    <td>${u.active ? '<span class="badge bg-success">Активен</span>' : '<span class="badge bg-secondary">Отключён</span>'}</td>
+    <td class="text-end">
+      <button class="btn btn-sm btn-outline-primary me-1" onclick="editUser(${u.id})"><i class="bi bi-pencil"></i></button>
+      <button class="btn btn-sm btn-outline-danger" onclick="deleteUser(${u.id},'${u.full_name}')"><i class="bi bi-trash"></i></button>
+    </td>
+  </tr>`).join('');
+}
+
+function openUserForm() {
+  document.getElementById('user-id').value = '';
+  document.getElementById('user-modal-title').textContent = 'Добавить пользователя';
+  document.getElementById('u-fullname').value = '';
+  document.getElementById('u-username').value = '';
+  document.getElementById('u-username').disabled = false;
+  document.getElementById('u-password').value = '';
+  document.getElementById('u-role').value = 'cashier';
+  document.getElementById('u-active').checked = true;
+  document.getElementById('pass-hint').textContent = '';
+  document.getElementById('user-error').classList.add('d-none');
+  new bootstrap.Modal(document.getElementById('userModal')).show();
+}
+
+function editUser(id) {
+  const u = users.find(x => x.id === id);
+  document.getElementById('user-id').value = u.id;
+  document.getElementById('user-modal-title').textContent = 'Редактировать пользователя';
+  document.getElementById('u-fullname').value = u.full_name;
+  document.getElementById('u-username').value = u.username;
+  document.getElementById('u-username').disabled = true;
+  document.getElementById('u-password').value = '';
+  document.getElementById('u-role').value = u.role;
+  document.getElementById('u-active').checked = !!u.active;
+  document.getElementById('pass-hint').textContent = '(оставьте пустым, чтобы не менять)';
+  document.getElementById('user-error').classList.add('d-none');
+  new bootstrap.Modal(document.getElementById('userModal')).show();
+}
+
+async function saveUser() {
+  const id = document.getElementById('user-id').value;
+  const data = {
+    full_name: document.getElementById('u-fullname').value.trim(),
+    username: document.getElementById('u-username').value.trim(),
+    password: document.getElementById('u-password').value,
+    role: document.getElementById('u-role').value,
+    active: document.getElementById('u-active').checked ? 1 : 0,
+  };
+  const url = id ? `/api/users/${id}` : '/api/users';
+  const method = id ? 'PUT' : 'POST';
+  const resp = await apiReq(method, url, data);
+  if (resp.ok) {
+    bootstrap.Modal.getInstance(document.getElementById('userModal')).hide();
+    toast('Сохранено', 'success');
+    loadUsers();
+  } else {
+    const d = await resp.json();
+    document.getElementById('user-error').textContent = d.error;
+    document.getElementById('user-error').classList.remove('d-none');
+  }
+}
+
+function deleteUser(id, name) {
+  confirmDialog(`Деактивировать пользователя "${name}"?`, async () => {
+    const resp = await apiReq('DELETE', `/api/users/${id}`);
+    if (resp.ok) { toast('Пользователь деактивирован', 'success'); loadUsers(); }
+    else { const d = await resp.json(); toast(d.error, 'danger'); }
+  });
+}
+
+loadUsers();
+</script>
+{% endblock %}

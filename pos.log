@@ -1,0 +1,25 @@
+2026-04-26 09:18:43 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5000
+2026-04-26 09:18:43 [INFO] [33mPress CTRL+C to quit[0m
+2026-04-26 09:18:45 [INFO] 127.0.0.1 - - [26/Apr/2026 09:18:45] "[32mGET / HTTP/1.1[0m" 302 -
+2026-04-26 09:18:45 [INFO] 127.0.0.1 - - [26/Apr/2026 09:18:45] "GET /login HTTP/1.1" 200 -
+2026-04-26 09:18:45 [INFO] 127.0.0.1 - - [26/Apr/2026 09:18:45] "GET /static/style.css HTTP/1.1" 200 -
+2026-04-26 09:18:46 [INFO] 127.0.0.1 - - [26/Apr/2026 09:18:46] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2026-04-26 09:18:54 [INFO] 127.0.0.1 - - [26/Apr/2026 09:18:54] "[31m[1mPOST /api/login HTTP/1.1[0m" 401 -
+2026-04-26 09:19:06 [INFO] ¬ход: admin (admin)
+2026-04-26 09:19:06 [INFO] 127.0.0.1 - - [26/Apr/2026 09:19:06] "POST /api/login HTTP/1.1" 200 -
+2026-04-26 09:19:06 [INFO] 127.0.0.1 - - [26/Apr/2026 09:19:06] "GET /cashier HTTP/1.1" 200 -
+2026-04-26 09:19:06 [INFO] 127.0.0.1 - - [26/Apr/2026 09:19:06] "[36mGET /static/style.css HTTP/1.1[0m" 304 -
+2026-04-26 09:19:06 [INFO] 127.0.0.1 - - [26/Apr/2026 09:19:06] "GET /static/app.js HTTP/1.1" 200 -
+2026-04-26 09:19:06 [INFO] 127.0.0.1 - - [26/Apr/2026 09:19:06] "GET /static/cashier.js HTTP/1.1" 200 -
+2026-04-26 09:19:06 [INFO] 127.0.0.1 - - [26/Apr/2026 09:19:06] "GET /api/me HTTP/1.1" 200 -
+2026-04-26 09:19:06 [INFO] 127.0.0.1 - - [26/Apr/2026 09:19:06] "GET /api/shifts/active HTTP/1.1" 200 -
+2026-04-26 09:19:06 [INFO] 127.0.0.1 - - [26/Apr/2026 09:19:06] "GET /api/shifts/active HTTP/1.1" 200 -
+2026-04-26 09:19:06 [INFO] 127.0.0.1 - - [26/Apr/2026 09:19:06] "GET /api/products/favorites HTTP/1.1" 200 -
+2026-04-26 09:19:23 [INFO] 127.0.0.1 - - [26/Apr/2026 09:19:23] "GET /products HTTP/1.1" 200 -
+2026-04-26 09:19:23 [INFO] 127.0.0.1 - - [26/Apr/2026 09:19:23] "[36mGET /static/style.css HTTP/1.1[0m" 304 -
+2026-04-26 09:19:23 [INFO] 127.0.0.1 - - [26/Apr/2026 09:19:23] "[36mGET /static/app.js HTTP/1.1[0m" 304 -
+2026-04-26 09:19:23 [INFO] 127.0.0.1 - - [26/Apr/2026 09:19:23] "GET /api/products HTTP/1.1" 200 -
+2026-04-26 09:19:23 [INFO] 127.0.0.1 - - [26/Apr/2026 09:19:23] "GET /api/categories HTTP/1.1" 200 -
+2026-04-26 09:19:23 [INFO] 127.0.0.1 - - [26/Apr/2026 09:19:23] "GET /api/me HTTP/1.1" 200 -
+2026-04-26 09:19:23 [INFO] 127.0.0.1 - - [26/Apr/2026 09:19:23] "GET /api/shifts/active HTTP/1.1" 200 -
